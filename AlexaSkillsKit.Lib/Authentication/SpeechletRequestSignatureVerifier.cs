@@ -80,7 +80,7 @@ namespace AlexaSkillsKit.Authentication
         public static X509Certificate RetrieveAndVerifyCertificate(string certChainUrl) {
             // making requests to externally-supplied URLs is an open invitation to DoS
             // so restrict host to an Alexa controlled subdomain/path
-            if (!Regex.IsMatch(certChainUrl, Sdk.SIGNATURE_CERT_URL_MASK_REGEX)) return null;
+            if (!IsValidUrl(certChainUrl)) return null;
 
             var webClient = new WebClient();
             var content = webClient.DownloadString(certChainUrl);
@@ -108,7 +108,7 @@ namespace AlexaSkillsKit.Authentication
         public async static Task<X509Certificate> RetrieveAndVerifyCertificateAsync(string certChainUrl) {
             // making requests to externally-supplied URLs is an open invitation to DoS
             // so restrict host to an Alexa controlled subdomain/path
-            if (!Regex.IsMatch(certChainUrl, Sdk.SIGNATURE_CERT_URL_MASK_REGEX)) return null;
+            if (!IsValidUrl(certChainUrl)) return null;
 
             var httpClient = new HttpClient();
             var httpResponse = await httpClient.GetAsync(certChainUrl);
@@ -152,6 +152,46 @@ namespace AlexaSkillsKit.Authentication
             signer.BlockUpdate(serializedSpeechletRequest, 0, serializedSpeechletRequest.Length);            
 
             return signer.VerifySignature(expectedSig);
+        }
+
+        /// <summary>
+        /// Ensures the certificate URL meets Amazon's requirements.
+        /// </summary>
+        /// <param name="url">The URL to validate.</param>
+        /// <returns>Whether or not the URL meets the requirements.</returns>
+        public static bool IsValidUrl(
+            string url)
+        {
+            Uri uri = new Uri(url);
+            
+            // ensure it is https
+            if (!string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // ensure the host name is s3.amazonaws.com
+            if (!string.Equals(
+                               uri.Host,
+                               Sdk.SIGNATURE_CERT_URL,
+                               StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // path starts with echo.api (case sensitive)
+            if (!uri.LocalPath.StartsWith(Sdk.SIGNATURE_CERT_URL_PATH))
+            {
+                return false;
+            }
+
+            // verify PORT
+            if (uri.Port != 443)
+            {
+                return false;
+            }
+
+            return true;
         }
 
 
